@@ -50,7 +50,9 @@ contract AssetfyPredictionMarketFactory {
             yesName,
             yesSymbol,
             noName,
-            noSymbol
+            noSymbol,
+            arcsMarketAddress,
+            projectId
         );
 
         emit MarketCreated(newMarket);

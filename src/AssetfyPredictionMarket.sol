@@ -7,22 +7,25 @@ import "@assetfy/ARCSMarket.sol";
 import "../src/APPositionToken.sol";
 import "../src/interfaces/UniswapV2.sol";
 
-
 contract AssetfyPrediction {
+    bool public resolved;
+    bool public yesWins;
+    bool private _initialized; 
+
     IERC20 public collateral;
     APPositionToken public yesToken;
     APPositionToken public noToken;
     IUniswapV2Router02 public router;
     address public yesNoPair;
-    bool public resolved;
-    bool public yesWins;
-    uint256 public totalCollateral;
     address public oracle;
+    address public arcsMarketAddress;
 
-    bool private _initialized;
+    uint256 public totalCollateral;
+    uint256 public projectId;
+
+
     constructor() {
     }
-
 
     function initialize(
         address _collateral,
@@ -31,7 +34,9 @@ contract AssetfyPrediction {
         string memory _yesName,
         string memory _yesSymbol,
         string memory _noName,
-        string memory _noSymbol
+        string memory _noSymbol,
+        address _arcsMarketAddress,
+        uint256 _projectId
     ) external {
         require(!_initialized, "Already initialized");
         _initialized = true;
@@ -39,6 +44,8 @@ contract AssetfyPrediction {
         collateral = IERC20(_collateral);
         router = IUniswapV2Router02(_router);
         oracle = _oracle;
+        arcsMarketAddress = _arcsMarketAddress;
+        projectId = _projectId;
 
         yesToken = new APPositionToken(_yesName, _yesSymbol, address(this));
         noToken = new APPositionToken(_noName, _noSymbol, address(this));
@@ -58,12 +65,15 @@ contract AssetfyPrediction {
     function split(uint256 amount) external {
         require(!resolved, "Market already resolved");
         require(amount > 0, "Invalid amount");
+
         bool success = collateral.transferFrom(msg.sender, address(this), amount);
         require(success, "Collateral transfer failed");
+
         totalCollateral += amount;
 
         yesToken.mint(msg.sender, amount);
         noToken.mint(msg.sender, amount);
+
         emit Split(msg.sender, amount);
     }
 
@@ -75,6 +85,7 @@ contract AssetfyPrediction {
         noToken.burn(msg.sender, amount);
 
         totalCollateral -= amount;
+
         bool success = collateral.transfer(msg.sender, amount);
         require(success, "Collateral transfer failed");
 
@@ -83,8 +94,14 @@ contract AssetfyPrediction {
 
     function provideLiquidity(uint256 yesAmount, uint256 noAmount) external {
         require(!resolved, "Market already resolved");
-        require(yesToken.transferFrom(msg.sender, address(this), yesAmount), "YES transfer fail");
-        require(noToken.transferFrom(msg.sender, address(this), noAmount), "NO transfer fail");
+        require(
+            yesToken.transferFrom(msg.sender, address(this), yesAmount),
+            "YES transfer fail"
+        );
+        require(
+            noToken.transferFrom(msg.sender, address(this), noAmount),
+            "NO transfer fail"
+        );
 
         yesToken.approve(address(router), yesAmount);
         noToken.approve(address(router), noAmount);
@@ -104,8 +121,10 @@ contract AssetfyPrediction {
     function resolveMarket(bool _yesWins) external {
         require(msg.sender == oracle, "Only oracle can resolve");
         require(!resolved, "Already resolved");
+
         resolved = true;
         yesWins = _yesWins;
+
         emit MarketResolved(_yesWins);
     }
 
@@ -120,6 +139,7 @@ contract AssetfyPrediction {
         }
 
         totalCollateral -= amount;
+
         bool success = collateral.transfer(msg.sender, amount);
         require(success, "Collateral transfer failed");
 
@@ -137,6 +157,7 @@ contract AssetfyPrediction {
 
         bool success = collateral.transferFrom(msg.sender, address(this), collateralAmount);
         require(success, "Collateral transfer failed");
+
         totalCollateral += collateralAmount;
 
         yesToken.mint(address(this), collateralAmount);
@@ -171,4 +192,3 @@ contract AssetfyPrediction {
         }
     }
 }
-
